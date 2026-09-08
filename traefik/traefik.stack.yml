@@ -1,0 +1,106 @@
+version: '3.8'
+services:
+  traefik:
+    # Keep the v2.11 configuration model used during the project, but pin the
+    # artifact so a redeploy cannot silently change its contents.
+    image: "traefik:v2.11.25@sha256:6b0e06781a8c7ecfc0171b86ef4239567913f025d054f829b93836484c08d4de"
+    command:
+      - --log.level=INFO
+      - --log.filePath=/var/log/traefik/traefik.log
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --providers.docker
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.swarmmode=true
+      - --providers.docker.network=edge-net
+      - --api
+      - --api.dashboard=true
+      - --ping=true
+      - --certificatesresolvers.leresolver.acme.caserver=https://acme-v02.api.letsencrypt.org/directory
+
+      - --certificatesresolvers.leresolver.acme.email=${LETSENCRYPT_EMAIL:-admin@example.com}
+
+      - --certificatesresolvers.leresolver.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.leresolver.acme.tlschallenge=true
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - edge-net
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - letsencrypt:/letsencrypt
+      - traefik-logs:/var/log/traefik
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+        failure_action: rollback
+        monitor: 30s
+      rollback_config:
+        parallelism: 1
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      placement:
+        constraints:
+          - node.role == manager
+      labels:
+        # Dashboard
+        - "traefik.enable=true"
+
+        - "traefik.http.routers.traefik.rule=Host(`edge-status.example.com`)"
+        - "traefik.http.routers.traefik.service=api@internal"
+        - "traefik.http.services.traefik.loadbalancer.server.port=8080"
+        - "traefik.http.routers.traefik.tls.certresolver=leresolver"
+        - "traefik.http.routers.traefik.entrypoints=websecure"
+        - "traefik.http.routers.traefik.middlewares=authinfra,infra-ratelimit,infra-compress"
+
+        # global redirect to https
+        - "traefik.http.routers.http-catchall.rule=hostregexp(`{host:.+}`)"
+        - "traefik.http.routers.http-catchall.entrypoints=web"
+        - "traefik.http.routers.http-catchall.middlewares=redirect-to-https"
+
+        # Middlewares
+
+        - "traefik.http.middlewares.authinfra.basicauth.users=${TRAEFIK_AUTH_USERS:?set TRAEFIK_AUTH_USERS in .env}"
+        - "traefik.http.middlewares.authinfra.basicauth.removeheader=true"
+
+        # Ratelimit.
+        - "traefik.http.middlewares.infra-ratelimit.ratelimit.average=1800"
+        - "traefik.http.middlewares.infra-ratelimit.ratelimit.burst=120"
+        - "traefik.http.middlewares.infra-ratelimit.ratelimit.period=1m"
+
+        # Retry 4 times with exponential backoff
+        - "traefik.http.middlewares.infra-retry.retry.attempts=4"
+        - "traefik.http.middlewares.infra-retry.retry.initialinterval=100ms"
+
+        # Enable compression
+        - "traefik.http.middlewares.infra-compress.compress=true"
+
+        # Middleware redirect to https
+        - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+        - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
+
+        # Middleware redirect to www
+        - "traefik.http.middlewares.redirect-to-www.redirectregex.regex=^https?://(?:www\\.)?(.*)"
+        - "traefik.http.middlewares.redirect-to-www.redirectregex.replacement=https://www.$$1"
+        - "traefik.http.middlewares.redirect-to-www.redirectregex.permanent=true"
+
+networks:
+  edge-net:
+    external: true
+volumes:
+  letsencrypt:
+    external: true
+  traefik-logs:
+    external: true

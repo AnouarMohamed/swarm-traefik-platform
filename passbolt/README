@@ -1,0 +1,12 @@
+First-Time Installation Instructions
+
+1.	Navigate to the container directory:
+
+cd /usr/share/php/passbolt/bin
+
+2.	Register a new user:
+
+./cake passbolt register_user -u {email} -f {firstname} -l {lastname} -r admin
+
+
+Replace {email}, {firstname}, and {lastname} with the appropriate user details.

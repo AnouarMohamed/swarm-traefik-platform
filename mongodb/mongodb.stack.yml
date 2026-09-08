@@ -1,0 +1,61 @@
+version: '3.1'
+
+services:
+  db:
+    image: mongo:7.0.11@sha256:bd38dc3d2895c7434b9b75c86525642efe3d65e4c6aadfe397486d7cc89406f0
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/MOONGO_ROOT_PASSWORD
+    networks:
+      - mongo-db
+    # No host port: only workloads attached to mongo-db may reach MongoDB.
+    secrets:
+      - MOONGO_ROOT_PASSWORD
+    volumes:
+      - mongo-db:/data/db
+      - mongo-config:/data/configdb
+
+  mongo-express:
+    image: mongo-express:1.0.2-20-alpine3.19@sha256:1aae0077525133249133d42980ba23998712a1077e02ac0ac295b50a7a79d550
+    environment:
+      ME_CONFIG_MONGODB_ENABLE_ADMIN: 'true'
+      ME_CONFIG_MONGODB_SERVER: 'db'
+      ME_CONFIG_MONGODB_PORT: 27017
+      ME_CONFIG_MONGODB_ADMINUSERNAME: root
+      ME_CONFIG_MONGODB_ADMINPASSWORD_FILE: /run/secrets/MOONGO_ROOT_PASSWORD
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD_FILE: /run/secrets/MONGO_EXPRESS_PASSWORD
+    networks:
+      - edge-net
+      - mongo-db
+    secrets:
+      - MOONGO_ROOT_PASSWORD
+      - MONGO_EXPRESS_PASSWORD
+    deploy:
+      replicas: 1
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.mongo-express.rule=Host(`mongodb-admin.example.com`)"
+        - "traefik.http.services.mongo-express.loadbalancer.server.port=8081"
+        - "traefik.http.routers.mongo-express.tls=true"
+        - "traefik.http.routers.mongo-express.tls.certresolver=leresolver"
+        - "traefik.http.routers.mongo-express.middlewares=infra-ratelimit"
+        - "traefik.http.routers.mongo-express.entrypoints=websecure"
+
+volumes:
+  mongo-db:
+    external: true
+  mongo-config:
+    external: true
+
+networks:
+  edge-net:
+    external: true
+  mongo-db:
+    external: true
+
+secrets:
+  MOONGO_ROOT_PASSWORD:
+    external: true
+  MONGO_EXPRESS_PASSWORD:
+    external: true

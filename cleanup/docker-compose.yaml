@@ -1,0 +1,9 @@
+version: '3.7'
+services:
+  cleanup:
+    image: ${CLEANUP_IMAGE:-registry.example.com/platform/cleanup:3.22-r1}
+    restart: always
+    environment:
+      - CRON_SCHEDULE=15 1 */6 * *
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

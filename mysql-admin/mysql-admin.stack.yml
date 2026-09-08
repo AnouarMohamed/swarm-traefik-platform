@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  db:
+    image: mysql:8.3@sha256:9de9d54fecee6253130e65154b930978b1fcc336bcc86dfd06e89b72a2588ebe
+    deploy:
+      replicas: 1
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/MYSQL_PRIME_ROOT_PASSWORD
+    volumes:
+      - mysql-vol:/var/lib/mysql
+    networks:
+      - mysql-net
+    secrets:
+      - MYSQL_PRIME_ROOT_PASSWORD
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:5.2.1@sha256:44328e7738eb732bed34fa2dd10c0e4683cbf0b87c23be2f660ea8ccfc271942
+    deploy:
+      replicas: 1
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.phpmyadmin.rule=Host(`db-admin.example.com`)"
+        - "traefik.http.services.phpmyadmin.loadbalancer.server.port=80"
+        - "traefik.http.routers.phpmyadmin.tls=true"
+        - "traefik.http.routers.phpmyadmin.tls.certresolver=leresolver"
+        - "traefik.http.routers.phpmyadmin.middlewares=authinfra"
+        - "traefik.http.routers.phpmyadmin.entrypoints=websecure"
+    environment:
+      PMA_HOST: db
+      PMA_PORT: 3306
+      UPLOAD_LIMIT: 300M
+    networks:
+      - edge-net
+      - mysql-net
+
+
+volumes:
+  mysql-vol:
+    external: true
+
+networks:
+  edge-net:
+    external: true
+  mysql-net:
+    external: true
+
+secrets:
+  MYSQL_PRIME_ROOT_PASSWORD:
+    external: true

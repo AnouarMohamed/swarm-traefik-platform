@@ -1,0 +1,12 @@
+FROM apache/superset:4.0.0@sha256:7abdba4afa2875762bdaa51f478e7d5d5ccf0785b105f1752d09c43488a7f736
+
+USER root
+
+# This is an override module, not a replacement for Superset's packaged
+# settings. Runtime credentials are supplied through Docker secrets.
+COPY --chown=superset:superset ./config.py /app/pythonpath/superset_config.py
+
+USER superset
+
+ENV SUPERSET_CONFIG_PATH=/app/pythonpath/superset_config.py \
+    SUPERSET_ENV=production

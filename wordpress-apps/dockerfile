@@ -1,0 +1,3 @@
+FROM wordpress:6.9.2-php8.3-apache@sha256:ba1996f128e96e06613cffd9efa17e619d077a427c2d135204b1bc3bc9fa0510
+
+COPY custom.ini $PHP_INI_DIR/conf.d/

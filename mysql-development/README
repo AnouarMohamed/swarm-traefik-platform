@@ -1,0 +1,11 @@
+- Run this tunnel:
+
+ssh -L 3307:127.0.0.1:3307 -N restricted@platform.com
+
+- To add new publice key to this user:
+
+nano /home/restricted/.ssh/authorized_keys
+
+- Restart SSH Service:
+
+Restart SSH Service

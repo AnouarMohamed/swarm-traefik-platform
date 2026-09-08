@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  superset:
+    image: ${SUPERSET_IMAGE:-registry.example.com/platform/superset:4.0.0-r1}
+    environment:
+      SUPERSET_CONFIG_PATH: /app/pythonpath/superset_config.py
+      SUPERSET_ENV: production
+      SUPERSET_ADMIN_USERNAME: ${SUPERSET_ADMIN_USERNAME:?set SUPERSET_ADMIN_USERNAME}
+      SUPERSET_ADMIN_FIRSTNAME: ${SUPERSET_ADMIN_FIRSTNAME:-Platform}
+      SUPERSET_ADMIN_LASTNAME: ${SUPERSET_ADMIN_LASTNAME:-Administrator}
+      SUPERSET_ADMIN_EMAIL: ${SUPERSET_ADMIN_EMAIL:?set SUPERSET_ADMIN_EMAIL}
+      SUPERSET_FRAME_ANCESTORS: ${SUPERSET_FRAME_ANCESTORS:-'self'}
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        superset db upgrade
+        if ! superset fab list-users | grep -Fq "$${SUPERSET_ADMIN_USERNAME}"; then
+          superset fab create-admin \
+            --username "$${SUPERSET_ADMIN_USERNAME}" \
+            --firstname "$${SUPERSET_ADMIN_FIRSTNAME}" \
+            --lastname "$${SUPERSET_ADMIN_LASTNAME}" \
+            --email "$${SUPERSET_ADMIN_EMAIL}" \
+            --password "$$(cat /run/secrets/SUPERSET_ADMIN_PASSWORD)"
+        fi
+        superset init
+        exec gunicorn --bind 0.0.0.0:8088 --workers 2 --timeout 120 "superset.app:create_app()"
+    secrets:
+      - SUPERSET_SECRET_KEY
+      - SUPERSET_DATABASE_URI
+      - SUPERSET_GUEST_TOKEN_JWT_SECRET
+      - SUPERSET_ADMIN_PASSWORD
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8088/health >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+      update_config:
+        parallelism: 1
+        order: stop-first
+        failure_action: rollback
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.superset.rule=Host(`superset.example.com`)"
+        - "traefik.http.middlewares.biHeader.headers.customrequestheaders.Cross-Origin-Resource-Policy=cross-origin"
+        - "traefik.http.middlewares.biHeader.headers.customresponseheaders.Cross-Origin-Resource-Policy=cross-origin"
+
+        - "traefik.http.middlewares.biHeader.headers.accesscontrolallowmethods=GET,OPTIONS,PUT,POST,PATCH,DELETE"
+        - "traefik.http.middlewares.biHeader.headers.accessControlAllowOriginList=${SUPERSET_ALLOWED_ORIGIN:?set SUPERSET_ALLOWED_ORIGIN}"
+        - "traefik.http.middlewares.biHeader.headers.accessControlAllowHeaders=*"
+        - "traefik.http.middlewares.biHeader.headers.accesscontrolmaxage=100"
+        - "traefik.http.middlewares.biHeader.headers.addvaryheader=true"
+        - "traefik.http.routers.superset.middlewares=biHeader"
+
+        - "traefik.http.services.superset.loadbalancer.server.port=8088"
+        - "traefik.http.routers.superset.tls=true"
+        - "traefik.http.routers.superset.tls.certresolver=leresolver"
+        - "traefik.http.routers.superset.entrypoints=websecure"
+    networks:
+      - edge-net
+      - mysql-net
+      - mysql-development
+    volumes:
+      - superset-vol:/app/superset_home
+
+
+volumes:
+  superset-vol:
+    external: true
+
+
+networks:
+  edge-net:
+    external: true
+  mysql-net:
+    external: true
+  mysql-development:
+    external: true
+
+secrets:
+  SUPERSET_SECRET_KEY:
+    external: true
+  SUPERSET_DATABASE_URI:
+    external: true
+  SUPERSET_GUEST_TOKEN_JWT_SECRET:
+    external: true
+  SUPERSET_ADMIN_PASSWORD:
+    external: true

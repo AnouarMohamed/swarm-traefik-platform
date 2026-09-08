@@ -1,0 +1,15 @@
+
+// Crate context to connect to docker on vm
+
+docker context create remote --docker "host=ssh://root@platform.com"
+
+// To use vm docker 
+
+docker context use remote
+
+// To use your local docker 
+docker context use default
+
+// TO see all context
+
+docker context ls

@@ -1,0 +1,13 @@
+.env
+.env.*
+!*.env.example
+*.log
+*.pem
+*.key
+acme.json
+letsencrypt/
+secrets/
+*.secret
+__pycache__/
+*.pyc
+.DS_Store

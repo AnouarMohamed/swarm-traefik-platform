@@ -1,0 +1,38 @@
+version: "3.8"
+
+services:
+  glpi:
+    # The vendor image lacks a versioned tag; the digest still freezes the
+    # reviewed artifact until an explicit upgrade is performed.
+    image: elestio/glpi:latest@sha256:cacc0e2c2b7858f906306f74c5869b8cd2f77f699c70aaf6817518c368a4165d
+    # `restart` is a Compose option ignored by `docker stack deploy`; Swarm
+    # restart behavior is defined under deploy.restart_policy below.
+    volumes:
+      - glpi-vol:/var/www/html/glpi
+    # environment:
+    #   - TIMEZONE=Europe/Berlin
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.glpi.rule=Host(`glpi.example.com`)"
+        - "traefik.http.routers.glpi.tls=true"
+        - "traefik.http.routers.glpi.tls.certresolver=leresolver"
+        - "traefik.http.routers.glpi.entrypoints=websecure"
+        - "traefik.http.routers.glpi.middlewares=infra-ratelimit,infra-compress"
+        - "traefik.http.services.glpi.loadbalancer.server.port=80"
+    networks:
+      - edge-net
+      - mysql-net
+
+volumes:
+  glpi-vol:
+
+networks:
+  edge-net:
+    external: true
+  mysql-net:
+    external: true
